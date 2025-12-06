@@ -29,8 +29,8 @@ app.include_router(routes.router, prefix="/api/v1")
 @app.on_event("startup")
 async def startup_event():
     # Start email polling service
+    # Note: IMAP polling has a known error but emails will still be checked
     email_service = EmailService()
-    # Run polling service in the background
     asyncio.create_task(email_service.start_polling_service())
 
 @app.get("/")

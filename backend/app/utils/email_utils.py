@@ -71,28 +71,46 @@ class EmailReceiver:
         Poll emails from the inbox and return parsed emails
         """
         try:
-            # Connect to the server
-            with IMAPClient(self.imap_server, port=self.imap_port, ssl=True) as client:
-                client.login(self.email_address, self.email_password)
-                client.select_folder(folder)
+            # Use standard imaplib instead of IMAPClient to avoid the 'file' property error
+            mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
+            mail.login(self.email_address, self.email_password)
+            mail.select(folder)
+            
+            # Search for unseen emails
+            status, messages = mail.search(None, 'UNSEEN')
+            
+            if status != 'OK':
+                return []
+            
+            email_ids = messages[0].split()
+            emails = []
+            
+            for email_id in email_ids:
+                # Fetch the email
+                status, msg_data = mail.fetch(email_id, '(RFC822)')
                 
-                # Search for unseen emails
-                messages = client.search(['UNSEEN'])
+                if status != 'OK':
+                    continue
                 
-                emails = []
-                for uid, message_data in client.fetch(messages, ['RFC822']).items():
-                    email_message = email.message_from_bytes(message_data[b'RFC822'])
-                    
-                    # Parse email
-                    parsed_email = self._parse_email(email_message)
-                    parsed_email['uid'] = uid
-                    emails.append(parsed_email)
-                    
-                    # Mark as seen
-                    client.add_flags([uid], ['\\Seen'])
-                
-                return emails
-        except IMAPClientError as e:
+                # Parse the email
+                for response_part in msg_data:
+                    if isinstance(response_part, tuple):
+                        email_message = email.message_from_bytes(response_part[1])
+                        
+                        # Parse email
+                        parsed_email = self._parse_email(email_message)
+                        parsed_email['uid'] = email_id.decode()
+                        emails.append(parsed_email)
+                        
+                        # Mark as seen
+                        mail.store(email_id, '+FLAGS', '\\Seen')
+            
+            mail.close()
+            mail.logout()
+            
+            return emails
+            
+        except imaplib.IMAP4.error as e:
             print(f"IMAP error: {str(e)}")
             return []
         except Exception as e:
@@ -124,7 +142,15 @@ class EmailReceiver:
                     # Get the email body
                     if "attachment" not in content_disposition:
                         if content_type == "text/plain":
-                            body = part.get_payload(decode=True).decode()
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                # Try different encodings
+                                for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'windows-1252']:
+                                    try:
+                                        body = payload.decode(encoding)
+                                        break
+                                    except (UnicodeDecodeError, AttributeError):
+                                        continue
                         elif content_type == "text/html":
                             # For simplicity, we're not parsing HTML emails
                             pass
@@ -142,12 +168,21 @@ class EmailReceiver:
                                     'is_pdf': True
                                 })
                 except Exception as e:
-                    print(f"Error parsing email part: {str(e)}")
+                    # Silently skip parts that can't be decoded
+                    pass
         else:
             # Not multipart - get payload directly
             content_type = email_message.get_content_type()
             if content_type == "text/plain":
-                body = email_message.get_payload(decode=True).decode()
+                payload = email_message.get_payload(decode=True)
+                if payload:
+                    # Try different encodings
+                    for encoding in ['utf-8', 'latin-1', 'iso-8859-1', 'windows-1252']:
+                        try:
+                            body = payload.decode(encoding)
+                            break
+                        except (UnicodeDecodeError, AttributeError):
+                            continue
             elif content_type == "text/html":
                 # For simplicity, we're not parsing HTML emails
                 pass

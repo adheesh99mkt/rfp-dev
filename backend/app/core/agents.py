@@ -1,8 +1,7 @@
 import os
 from openai import OpenAI
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate
 from app.schemas import RFPCreate, ProposalCreate
 from typing import Dict, Any
 import json
@@ -27,7 +26,7 @@ class RFPGeneratorAgent:
             "title": "Brief title for the RFP",
             "description": "Detailed description of what is being procured",
             "budget": 0.0,
-            "deadline": "YYYY-MM-DDTHH:MM:SS",
+            "deadline": "2025-12-31T23:59:59",
             "items": [
                 {{
                     "name": "Item name",
@@ -41,6 +40,12 @@ class RFPGeneratorAgent:
             "warranty_requirements": "Warranty requirements if mentioned"
         }}
         
+        IMPORTANT:
+        - Use actual datetime values in ISO format (e.g., "2025-12-31T23:59:59")
+        - If no deadline is mentioned, use a date 30 days from today
+        - Use numeric values for budget and quantity, not strings
+        - Provide realistic estimates based on the request
+        
         Respond ONLY with the JSON object, no additional text.
         """
         
@@ -49,20 +54,26 @@ class RFPGeneratorAgent:
             template=prompt_template
         )
         
-        chain = LLMChain(llm=self.llm, prompt=prompt)
-        response = chain.run(user_prompt=user_prompt)
+        # Use invoke instead of LLMChain
+        formatted_prompt = prompt.format(user_prompt=user_prompt)
+        response = self.llm.invoke(formatted_prompt)
         
         # Parse the JSON response
         try:
-            rfp_data = json.loads(response)
+            rfp_data = json.loads(response.content)
+            # Validate and fix deadline if needed
+            if rfp_data.get('deadline') == 'YYYY-MM-DDTHH:MM:SS' or not rfp_data.get('deadline'):
+                from datetime import datetime, timedelta
+                rfp_data['deadline'] = (datetime.now() + timedelta(days=30)).isoformat()
             return RFPCreate(**rfp_data)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, Exception) as e:
             # Fallback in case of parsing error
+            from datetime import datetime, timedelta
             return RFPCreate(
                 title="Procurement Request",
                 description=user_prompt,
                 budget=0.0,
-                deadline="2025-12-31T23:59:59",
+                deadline=(datetime.now() + timedelta(days=30)).isoformat(),
                 items=[],
                 delivery_terms="Standard delivery terms",
                 payment_terms="Net 30",
@@ -119,12 +130,12 @@ class ResponseParserAgent:
             template=prompt_template
         )
         
-        chain = LLMChain(llm=self.llm, prompt=prompt)
-        response = chain.run(rfp_details=rfp_details, email_content=email_content)
+        formatted_prompt = prompt.format(rfp_details=rfp_details, email_content=email_content)
+        response = self.llm.invoke(formatted_prompt)
         
         # Parse the JSON response
         try:
-            proposal_data = json.loads(response)
+            proposal_data = json.loads(response.content)
             return ProposalCreate(**proposal_data)
         except json.JSONDecodeError:
             # Fallback in case of parsing error
@@ -164,10 +175,13 @@ class ComparisonAgent:
                 {{
                     "vendor_id": 0,
                     "vendor_name": "Vendor Name",
-                    "total_score": 0.0,
-                    "price_score": 0.0,
-                    "terms_score": 0.0,
-                    "completeness_score": 0.0,
+                    "total_price": 0.0,
+                    "delivery_terms": "Delivery terms from proposal",
+                    "payment_terms": "Payment terms from proposal",
+                    "total_score": 8.5,
+                    "price_score": 9.0,
+                    "terms_score": 8.0,
+                    "completeness_score": 8.5,
                     "details": {{
                         "strengths": "Strengths of this proposal",
                         "weaknesses": "Weaknesses of this proposal",
@@ -178,10 +192,13 @@ class ComparisonAgent:
             "recommendation": "Overall recommendation with reasoning"
         }}
         
-        Scoring criteria:
-        - Price Score (40% weight): Lower prices get higher scores
-        - Terms Score (30% weight): More favorable terms get higher scores
-        - Completeness Score (30% weight): More complete responses get higher scores
+        CRITICAL - YOU MUST CALCULATE ACTUAL NUMERIC SCORES (1-10 scale):
+        - Price Score (40% weight): Compare total prices. Best price = 10, worst = relative score
+        - Terms Score (30% weight): Evaluate delivery time, payment terms, warranty. Best = 10
+        - Completeness Score (30% weight): Check if all RFP items are addressed. Complete = 10
+        - Total Score: Weighted average = (price_score * 0.4) + (terms_score * 0.3) + (completeness_score * 0.3)
+        
+        DO NOT return 0 for scores. You MUST calculate real numeric values between 1-10 based on the actual proposal data.
         
         Respond ONLY with the JSON object, no additional text.
         """
@@ -194,12 +211,12 @@ class ComparisonAgent:
             template=prompt_template
         )
         
-        chain = LLMChain(llm=self.llm, prompt=prompt)
-        response = chain.run(rfp_details=rfp_details, proposals_data=proposals_details)
+        formatted_prompt = prompt.format(rfp_details=rfp_details, proposals_data=proposals_details)
+        response = self.llm.invoke(formatted_prompt)
         
         # Parse the JSON response
         try:
-            comparison_data = json.loads(response)
+            comparison_data = json.loads(response.content)
             return comparison_data
         except json.JSONDecodeError:
             # Fallback in case of parsing error

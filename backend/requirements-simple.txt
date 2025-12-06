@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+email-validator
+python-dotenv
+openai
+langchain
+langchain-openai
+imapclient
+pdfplumber
+sqlalchemy
+alembic
+psycopg2-binary

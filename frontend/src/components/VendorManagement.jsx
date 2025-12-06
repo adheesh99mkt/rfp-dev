@@ -1,26 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Table, Button, Modal, ButtonToolbar, Message, toaster, Pagination, Input } from 'rsuite';
+import { Plus, Edit, Trash } from '@rsuite/icons';
+import { vendorAPI } from '../services/api';
 
 const VendorManagement = () => {
-  const [vendors, setVendors] = useState([
-    {
-      id: 1,
-      name: "Tech Solutions Inc.",
-      email: "contact@techsolutions.com",
-      contact_person: "John Smith",
-      phone: "+1 (555) 123-4567",
-      address: "123 Tech Street, San Francisco, CA 94103"
-    },
-    {
-      id: 2,
-      name: "Global Electronics Ltd.",
-      email: "info@globalelectronics.com",
-      contact_person: "Sarah Johnson",
-      phone: "+1 (555) 987-6543",
-      address: "456 Electronic Ave, New York, NY 10001"
-    }
-  ]);
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [limit, setLimit] = useState(10);
+  const [page, setPage] = useState(1);
   
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingVendorId, setDeletingVendorId] = useState(null);
   const [editingVendor, setEditingVendor] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -29,6 +21,25 @@ const VendorManagement = () => {
     phone: '',
     address: ''
   });
+
+  // Fetch vendors on component mount
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+
+  const fetchVendors = async () => {
+    try {
+      setLoading(true);
+      const data = await vendorAPI.getAll();
+      setVendors(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load vendors');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddVendor = () => {
     setFormData({
@@ -49,36 +60,74 @@ const VendorManagement = () => {
   };
 
   const handleDeleteVendor = (vendorId) => {
-    if (window.confirm('Are you sure you want to delete this vendor?')) {
-      setVendors(vendors.filter(vendor => vendor.id !== vendorId));
+    setDeletingVendorId(vendorId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await vendorAPI.delete(deletingVendorId);
+      await fetchVendors();
+      toaster.push(
+        <Message showIcon type="success" closable>
+          Vendor deleted successfully
+        </Message>,
+        { placement: 'topEnd' }
+      );
+    } catch (err) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          Failed to delete vendor
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(err);
+    } finally {
+      setShowDeleteConfirm(false);
+      setDeletingVendorId(null);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (editingVendor) {
-      // Update existing vendor
-      setVendors(vendors.map(vendor => 
-        vendor.id === editingVendor.id ? {...formData, id: editingVendor.id} : vendor
-      ));
-    } else {
-      // Add new vendor
-      const newVendor = {
-        ...formData,
-        id: Math.max(...vendors.map(v => v.id), 0) + 1
-      };
-      setVendors([...vendors, newVendor]);
+    try {
+      if (editingVendor) {
+        await vendorAPI.update(editingVendor.id, formData);
+        toaster.push(
+          <Message showIcon type="success" closable>
+            Vendor updated successfully
+          </Message>,
+          { placement: 'topEnd' }
+        );
+      } else {
+        await vendorAPI.create(formData);
+        toaster.push(
+          <Message showIcon type="success" closable>
+            Vendor created successfully
+          </Message>,
+          { placement: 'topEnd' }
+        );
+      }
+      
+      await fetchVendors();
+      setShowAddForm(false);
+      setFormData({
+        name: '',
+        email: '',
+        contact_person: '',
+        phone: '',
+        address: ''
+      });
+    } catch (err) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          {`Failed to ${editingVendor ? 'update' : 'create'} vendor`}
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(err);
     }
-    
-    setShowAddForm(false);
-    setFormData({
-      name: '',
-      email: '',
-      contact_person: '',
-      phone: '',
-      address: ''
-    });
   };
 
   const handleChange = (e) => {
@@ -88,144 +137,231 @@ const VendorManagement = () => {
     });
   };
 
+  const handleChangePage = (dataKey) => {
+    setPage(dataKey);
+  };
+
+  const handleChangeLength = (dataKey) => {
+    setPage(1);
+    setLimit(dataKey);
+  };
+
+  const getPaginatedData = () => {
+    return vendors.filter((v, i) => {
+      const start = limit * (page - 1);
+      const end = start + limit;
+      return i >= start && i < end;
+    });
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h2 className="text-2xl font-semibold text-gray-800">Manage Vendors</h2>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">Add, edit, or remove vendors</p>
+    <div style={{ width: '100%', height: '100%' }}>
+      <div className="bg-white" style={{ width: '100%', minHeight: '100vh' }}>
+        <div className="px-6 py-5 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-indigo-100 p-2 rounded-lg">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Manage Vendors</h2>
+                <p className="text-sm text-gray-600">Add, edit, or remove vendor profiles</p>
+              </div>
+            </div>
+            <Button
+              onClick={handleAddVendor}
+              appearance="primary"
+              size="lg"
+              startIcon={<Plus />}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600"
+            >
+              Add Vendor
+            </Button>
+          </div>
         </div>
         <div className="border-t border-gray-200">
-          <div className="p-6">
-            <div className="flex justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Vendor List</h3>
-              <button
-                onClick={handleAddVendor}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Add Vendor
-              </button>
-            </div>
-            
-            {showAddForm && (
-              <div className="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-                <h4 className="text-md font-medium text-gray-900 mb-4">
-                  {editingVendor ? 'Edit Vendor' : 'Add New Vendor'}
-                </h4>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Company Name</label>
-                      <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Email</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Contact Person</label>
-                      <input
-                        type="text"
-                        name="contact_person"
-                        value={formData.contact_person}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Phone</label>
-                      <input
-                        type="text"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Address</label>
-                    <textarea
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      rows="2"
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    ></textarea>
-                  </div>
-                  <div className="flex space-x-3">
-                    <button
-                      type="submit"
-                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      {editingVendor ? 'Update Vendor' : 'Add Vendor'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddForm(false)}
-                      className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+          <div className="p-6" style={{ width: '100%' }}>
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-800">{error}</p>
               </div>
             )}
             
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact Person</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {vendors.map((vendor) => (
-                    <tr key={vendor.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{vendor.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor.contact_person}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vendor.phone}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button
-                          onClick={() => handleEditVendor(vendor)}
-                          className="text-indigo-600 hover:text-indigo-900 mr-2"
+            {loading ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Loading vendors...</p>
+              </div>
+            ) : (
+              <>
+            <div style={{ width: '100%' }}>
+              <Table
+                autoHeight
+                data={getPaginatedData()}
+                loading={loading}
+                bordered
+                cellBordered
+              >
+                <Table.Column flexGrow={2} minWidth={200}>
+                  <Table.HeaderCell>Name</Table.HeaderCell>
+                  <Table.Cell dataKey="name" />
+                </Table.Column>
+
+                <Table.Column flexGrow={2} minWidth={250}>
+                  <Table.HeaderCell>Email</Table.HeaderCell>
+                  <Table.Cell dataKey="email" />
+                </Table.Column>
+
+                <Table.Column flexGrow={1} minWidth={150}>
+                  <Table.HeaderCell>Contact Person</Table.HeaderCell>
+                  <Table.Cell dataKey="contact_person" />
+                </Table.Column>
+
+                <Table.Column flexGrow={1} minWidth={150}>
+                  <Table.HeaderCell>Phone</Table.HeaderCell>
+                  <Table.Cell dataKey="phone" />
+                </Table.Column>
+
+                <Table.Column width={180} fixed="right">
+                  <Table.HeaderCell>Actions</Table.HeaderCell>
+                  <Table.Cell>
+                    {rowData => (
+                      <ButtonToolbar>
+                        <Button
+                          size="sm"
+                          appearance="ghost"
+                          startIcon={<Edit />}
+                          onClick={() => handleEditVendor(rowData)}
                         >
                           Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVendor(vendor.id)}
-                          className="text-red-600 hover:text-red-900"
+                        </Button>
+                        <Button
+                          size="sm"
+                          appearance="ghost"
+                          color="red"
+                          startIcon={<Trash />}
+                          onClick={() => handleDeleteVendor(rowData.id)}
                         >
                           Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </Button>
+                      </ButtonToolbar>
+                    )}
+                  </Table.Cell>
+                </Table.Column>
+              </Table>
+              <div style={{ padding: 20 }}>
+                <Pagination
+                  prev
+                  next
+                  first
+                  last
+                  ellipsis
+                  boundaryLinks
+                  maxButtons={5}
+                  size="md"
+                  layout={['total', '-', 'limit', '|', 'pager', 'skip']}
+                  total={vendors.length}
+                  limitOptions={[10, 20, 50]}
+                  limit={limit}
+                  activePage={page}
+                  onChangePage={handleChangePage}
+                  onChangeLimit={handleChangeLength}
+                />
+              </div>
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Add/Edit Vendor Modal */}
+      <Modal open={showAddForm} onClose={() => setShowAddForm(false)} size="md">
+        <Modal.Header>
+          <Modal.Title>{editingVendor ? 'Edit Vendor' : 'Add New Vendor'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <form id="vendor-form" onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+              <Input
+                name="name"
+                value={formData.name}
+                onChange={(value) => setFormData({...formData, name: value})}
+                placeholder="Enter company name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+              <Input
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={(value) => setFormData({...formData, email: value})}
+                placeholder="vendor@company.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+              <Input
+                name="contact_person"
+                value={formData.contact_person}
+                onChange={(value) => setFormData({...formData, contact_person: value})}
+                placeholder="John Doe"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <Input
+                name="phone"
+                value={formData.phone}
+                onChange={(value) => setFormData({...formData, phone: value})}
+                placeholder="+1 (555) 123-4567"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              <Input
+                as="textarea"
+                rows={3}
+                name="address"
+                value={formData.address}
+                onChange={(value) => setFormData({...formData, address: value})}
+                placeholder="123 Main St, City, State, ZIP"
+              />
+            </div>
+          </form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button type="submit" form="vendor-form" appearance="primary">
+            {editingVendor ? 'Update Vendor' : 'Add Vendor'}
+          </Button>
+          <Button onClick={() => setShowAddForm(false)} appearance="subtle">
+            Cancel
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} size="xs">
+        <Modal.Header>
+          <Modal.Title>Confirm Delete</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Are you sure you want to delete this vendor? This action cannot be undone.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button onClick={confirmDelete} appearance="primary" color="red">
+            Delete
+          </Button>
+          <Button onClick={() => setShowDeleteConfirm(false)} appearance="subtle">
+            Cancel
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

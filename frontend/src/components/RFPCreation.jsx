@@ -1,257 +1,326 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Button, Input, Checkbox, Message, toaster, Loader } from 'rsuite';
+import { Send, Save, Gear } from '@rsuite/icons';
+import { rfpAPI, vendorAPI } from '../services/api';
+
+// --- ICONS (For that professional UI look) ---
+const SendIcon = () => (
+  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+);
+const SaveIcon = () => (
+  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+);
+const SparklesIcon = () => (
+   <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+);
 
 const RFPCreation = () => {
+  // --- STATE MANAGEMENT (Your original logic) ---
   const [prompt, setPrompt] = useState('');
   const [generatedRFP, setGeneratedRFP] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [vendors, setVendors] = useState([]);
+  const [selectedVendors, setSelectedVendors] = useState([]);
+  const [error, setError] = useState(null);
+
+  // --- API HANDLERS (Your original logic) ---
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+
+  const fetchVendors = async () => {
+    try {
+      const data = await vendorAPI.getAll();
+      setVendors(data);
+    } catch (err) {
+      console.error('Failed to fetch vendors:', err);
+    }
+  };
 
   const handleGenerateRFP = async () => {
     if (!prompt.trim()) return;
-    
     setIsLoading(true);
-    
+    setError(null);
     try {
-      // In a real implementation, this would call our backend API
-      // const response = await fetch('/api/v1/ai/create-rfp', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({ prompt }),
-      // });
-      // const data = await response.json();
-      // setGeneratedRFP(data.rfp);
-      
-      // Mock response for demonstration
-      setTimeout(() => {
-        setGeneratedRFP({
-          title: "Office Equipment Procurement",
-          description: "Procurement of laptops and monitors for new office setup",
-          budget: 50000,
-          deadline: "2025-12-31T23:59:59",
-          items: [
-            {
-              name: "Laptop",
-              quantity: 20,
-              description: "Business laptops for employees",
-              specifications: "16GB RAM, 512GB SSD, Intel i7 processor"
-            },
-            {
-              name: "Monitor",
-              quantity: 15,
-              description: "Desktop monitors for workstations",
-              specifications: "27-inch, 4K resolution"
-            }
-          ],
-          delivery_terms: "Delivery within 30 days of order confirmation",
-          payment_terms: "Net 30 payment terms",
-          warranty_requirements: "Minimum 1 year warranty on all equipment"
-        });
-        setIsLoading(false);
-      }, 1500);
+      const data = await rfpAPI.generate(prompt);
+      setGeneratedRFP(data);
     } catch (error) {
       console.error('Error generating RFP:', error);
+      setError('Failed to generate RFP. Check backend .env configuration.');
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSaveRFP = () => {
-    // In a real implementation, this would save the RFP to the database
-    alert('RFP saved successfully!');
+  const handleSaveRFP = async () => {
+    try {
+      await rfpAPI.create(generatedRFP);
+      toaster.push(
+        <Message showIcon type="success" closable>
+          RFP saved successfully!
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      setGeneratedRFP(null);
+      setPrompt('');
+    } catch (error) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          Failed to save RFP
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(error);
+    }
   };
 
-  const handleSendRFP = () => {
-    // In a real implementation, this would send the RFP to selected vendors
-    alert('RFP sent to vendors successfully!');
+  const handleSendRFP = async () => {
+    if (selectedVendors.length === 0) {
+      toaster.push(
+        <Message showIcon type="warning" closable>
+          Please select at least one vendor
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      return;
+    }
+    try {
+      const savedRFP = await rfpAPI.create(generatedRFP);
+      await rfpAPI.sendToVendors(savedRFP.id, selectedVendors);
+      toaster.push(
+        <Message showIcon type="success" closable>
+          RFP sent to vendors successfully!
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      setGeneratedRFP(null);
+      setPrompt('');
+      setSelectedVendors([]);
+    } catch (error) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          Failed to send RFP
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(error);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h2 className="text-2xl font-semibold text-gray-800">Create New RFP</h2>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">Describe what you want to procure in natural language</p>
+    // MAIN CONTAINER: Full Screen Split View
+    <div className="flex h-screen w-full bg-white overflow-hidden font-sans text-gray-800">
+      
+      {/* --- LEFT PANEL: INPUT (50% Width) --- */}
+      <div className="w-1/2 flex flex-col border-r border-gray-200">
+        
+        {/* Header */}
+        <div className="h-14 min-h-[3.5rem] flex items-center px-6 border-b border-gray-200 bg-gray-50">
+          <span className="bg-indigo-100 text-indigo-700 p-1.5 rounded-md mr-3">
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+          </span>
+          <h2 className="font-semibold text-gray-700">RFP Composer</h2>
         </div>
-        <div className="border-t border-gray-200">
-          <div className="p-6">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-40 p-4 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="I need to procure laptops and monitors for our new office. Budget is $50,000 total. Need delivery within 30 days. We need 20 laptops with 16GB RAM and 15 monitors 27-inch. Payment terms should be net 30, and we need at least 1 year warranty."
-            ></textarea>
-            <div className="mt-4">
-              <button
-                onClick={handleGenerateRFP}
-                disabled={isLoading || !prompt.trim()}
-                className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  isLoading || !prompt.trim()
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
-              >
-                {isLoading ? 'Generating...' : 'Generate RFP with AI'}
-              </button>
+
+        {/* Content Area */}
+        <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-white">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              {error}
             </div>
+          )}
+
+          <p className="text-sm text-gray-500 mb-2">
+            Describe requirements in natural language.
+          </p>
+
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="max-h-[40%] flex-1 w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none font-mono text-sm bg-gray-50"
+            placeholder="// Example:&#10;I need to procure laptops and monitors for our new office.&#10;Budget is $50,000 total.&#10;Need 20 laptops (16GB RAM) and 15 monitors."
+          ></textarea>
+
+          <div className="mt-4 flex justify-end">
+            <Button
+              onClick={handleGenerateRFP}
+              disabled={isLoading || !prompt.trim()}
+              loading={isLoading}
+              appearance="primary"
+              size="lg"
+              startIcon={isLoading ? null : <Gear />}
+            >
+              {isLoading ? 'Generating...' : 'Generate with AI'}
+            </Button>
           </div>
         </div>
       </div>
 
-      {generatedRFP && (
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-2xl font-semibold text-gray-800">Generated RFP</h2>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500">Review and edit the AI-generated RFP</p>
+      {/* --- RIGHT PANEL: OUTPUT (50% Width) --- */}
+      <div className="w-1/2 flex flex-col bg-gray-50/50">
+        
+        {/* Header */}
+        <div className="h-14 min-h-[3.5rem] flex items-center justify-between px-6 border-b border-gray-200 bg-white">
+          <div className="flex items-center">
+             <SparklesIcon />
+             <h2 className="ml-2 font-semibold text-gray-700">Live Preview</h2>
           </div>
-          <div className="border-t border-gray-200">
-            <div className="p-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Title</label>
-                  <input
-                    type="text"
-                    value={generatedRFP.title}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, title: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Budget ($)</label>
-                  <input
-                    type="number"
-                    value={generatedRFP.budget}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, budget: parseFloat(e.target.value)})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Deadline</label>
-                  <input
-                    type="datetime-local"
-                    value={generatedRFP.deadline.substring(0, 16)}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, deadline: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Delivery Terms</label>
-                  <input
-                    type="text"
-                    value={generatedRFP.delivery_terms}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, delivery_terms: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Payment Terms</label>
-                  <input
-                    type="text"
-                    value={generatedRFP.payment_terms}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, payment_terms: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Warranty Requirements</label>
-                  <input
-                    type="text"
-                    value={generatedRFP.warranty_requirements}
-                    onChange={(e) => setGeneratedRFP({...generatedRFP, warranty_requirements: e.target.value})}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
+          {generatedRFP && (
+             <span className="text-xs font-medium px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                AI Generated
+             </span>
+          )}
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-8 relative">
+          
+          {/* 1. EMPTY STATE */}
+          {!generatedRFP && !isLoading && (
+            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+               <svg className="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+               <p className="text-lg font-medium text-gray-500">Ready to Generate</p>
+               <p className="text-sm">Type your requirements on the left to see the result here.</p>
+            </div>
+          )}
+
+          {/* 2. LOADING STATE */}
+          {isLoading && (
+             <div className="h-full flex flex-col items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                <p className="mt-4 text-gray-500">Analyzing requirements...</p>
+             </div>
+          )}
+
+          {/* 3. RESULT STATE */}
+          {generatedRFP && !isLoading && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              {/* General Details Card */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">General Details</h3>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-400 uppercase mb-1">Title</label>
+                      <input 
+                        type="text" 
+                        value={generatedRFP.title}
+                        onChange={(e) => setGeneratedRFP({...generatedRFP, title: e.target.value})}
+                        className="w-full p-2 border border-gray-300 rounded focus:border-indigo-500 outline-none transition-colors" 
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-xs font-medium text-gray-400 uppercase mb-1">Budget ($)</label>
+                      <input 
+                        type="number" 
+                        value={generatedRFP.budget}
+                        onChange={(e) => setGeneratedRFP({...generatedRFP, budget: parseFloat(e.target.value)})}
+                        className="w-full p-2 border border-gray-300 rounded focus:border-indigo-500 outline-none transition-colors" 
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-xs font-medium text-gray-400 uppercase mb-1">Deadline</label>
+                      <input 
+                        type="datetime-local" 
+                        value={generatedRFP.deadline ? generatedRFP.deadline.substring(0, 16) : ''}
+                        onChange={(e) => setGeneratedRFP({...generatedRFP, deadline: e.target.value})}
+                        className="w-full p-2 border border-gray-300 rounded focus:border-indigo-500 outline-none transition-colors" 
+                      />
+                   </div>
                 </div>
               </div>
-              
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea
-                  value={generatedRFP.description}
-                  onChange={(e) => setGeneratedRFP({...generatedRFP, description: e.target.value})}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  rows="3"
-                ></textarea>
-              </div>
-              
-              <div className="mt-6">
-                <h3 className="text-lg font-medium text-gray-900">Items</h3>
-                <div className="mt-4 space-y-4">
-                  {generatedRFP.items.map((item, index) => (
-                    <div key={index} className="grid grid-cols-1 gap-4 sm:grid-cols-2 p-4 border border-gray-200 rounded-md">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Item Name</label>
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => {
-                            const newItems = [...generatedRFP.items];
-                            newItems[index].name = e.target.value;
-                            setGeneratedRFP({...generatedRFP, items: newItems});
-                          }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const newItems = [...generatedRFP.items];
-                            newItems[index].quantity = parseInt(e.target.value);
-                            setGeneratedRFP({...generatedRFP, items: newItems});
-                          }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Description</label>
-                        <textarea
-                          value={item.description}
-                          onChange={(e) => {
-                            const newItems = [...generatedRFP.items];
-                            newItems[index].description = e.target.value;
-                            setGeneratedRFP({...generatedRFP, items: newItems});
-                          }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          rows="2"
-                        ></textarea>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Specifications</label>
-                        <textarea
-                          value={item.specifications}
-                          onChange={(e) => {
-                            const newItems = [...generatedRFP.items];
-                            newItems[index].specifications = e.target.value;
-                            setGeneratedRFP({...generatedRFP, items: newItems});
-                          }}
-                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                          rows="2"
-                        ></textarea>
-                      </div>
+
+              {/* Items Card */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">Items Required</h3>
+                <div className="space-y-3">
+                  {generatedRFP.items && generatedRFP.items.map((item, index) => (
+                    <div key={index} className="flex gap-4 p-3 bg-gray-50 rounded border border-gray-100">
+                        <div className="flex-1">
+                          <label className="block text-[10px] uppercase text-gray-400 font-bold mb-1">Item Name</label>
+                          <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => {
+                                const newItems = [...generatedRFP.items];
+                                newItems[index].name = e.target.value;
+                                setGeneratedRFP({...generatedRFP, items: newItems});
+                              }}
+                              className="w-full text-sm p-1 border border-gray-300 rounded"
+                          />
+                        </div>
+                        <div className="w-24">
+                          <label className="block text-[10px] uppercase text-gray-400 font-bold mb-1">Qty</label>
+                          <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newItems = [...generatedRFP.items];
+                                newItems[index].quantity = parseInt(e.target.value);
+                                setGeneratedRFP({...generatedRFP, items: newItems});
+                              }}
+                              className="w-full text-sm p-1 border border-gray-300 rounded"
+                          />
+                        </div>
                     </div>
                   ))}
                 </div>
               </div>
-              
-              <div className="mt-6 flex space-x-3">
-                <button
-                  onClick={handleSaveRFP}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Save RFP
-                </button>
-                <button
-                  onClick={handleSendRFP}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Send RFP to Vendors
-                </button>
-              </div>
+
+               {/* Vendors Card */}
+               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                 <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">Select Vendors</h3>
+                 <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                   {vendors.map((vendor) => (
+                     <label key={vendor.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer border border-transparent hover:border-gray-200 transition-colors">
+                       <input
+                         type="checkbox"
+                         checked={selectedVendors.includes(vendor.id)}
+                         onChange={(e) => {
+                           if (e.target.checked) {
+                             setSelectedVendors([...selectedVendors, vendor.id]);
+                           } else {
+                             setSelectedVendors(selectedVendors.filter(id => id !== vendor.id));
+                           }
+                         }}
+                         className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                       />
+                       <div className="ml-3 flex flex-col">
+                          <span className="text-sm font-medium text-gray-700">{vendor.name}</span>
+                          <span className="text-xs text-gray-500">{vendor.email}</span>
+                       </div>
+                     </label>
+                   ))}
+                 </div>
+               </div>
+
+               {/* Action Footer */}
+               <div className="pt-2 flex gap-3">
+                  <Button
+                    onClick={handleSaveRFP}
+                    appearance="default"
+                    size="lg"
+                    block
+                    startIcon={<Save />}
+                  >
+                    Save Draft
+                  </Button>
+                  <Button
+                    onClick={handleSendRFP}
+                    appearance="primary"
+                    color="green"
+                    size="lg"
+                    block
+                    startIcon={<Send />}
+                  >
+                    Send to Vendors
+                  </Button>
+               </div>
+
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
