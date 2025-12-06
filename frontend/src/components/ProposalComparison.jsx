@@ -1,22 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, SelectPicker, Message, toaster, Tag } from 'rsuite';
 import { PageEnd, InfoRound } from '@rsuite/icons';
 import { proposalAPI, rfpAPI } from '../services/api';
-
-// Destructure Table components for cleaner JSX
 const { Column, HeaderCell, Cell } = Table;
-
 const ProposalComparison = () => {
   const [rfps, setRfps] = useState([]);
   const [selectedRFPId, setSelectedRFPId] = useState(null);
   const [comparisonResults, setComparisonResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
+  const [isCached, setIsCached] = useState(false);
+  const [analyzedAt, setAnalyzedAt] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
   useEffect(() => {
     fetchRFPs();
   }, []);
-
+  useEffect(() => {
+    if (selectedRFPId) {
+      handleCompareProposals(false);
+    }
+  }, [selectedRFPId]);
   const fetchRFPs = async () => {
     try {
       const data = await rfpAPI.getAll();
@@ -26,15 +29,17 @@ const ProposalComparison = () => {
       console.error('Failed to fetch RFPs:', err);
     }
   };
-
-  const handleCompareProposals = async () => {
+  const handleCompareProposals = useCallback(async (forceRefresh = false) => {
     if (!selectedRFPId) return;
-
     try {
       setLoading(true);
       setError(null);
-      const data = await proposalAPI.compare(selectedRFPId);
-      setComparisonResults(data);
+      const data = await proposalAPI.compare(selectedRFPId, forceRefresh);
+      const comparison = data.comparison || data;
+      setComparisonResults(comparison);
+      setIsCached(data.cached || false);
+      setAnalyzedAt(data.analyzed_at || null);
+      setStatusMessage(data.message || null);
     } catch (err) {
       const errorMsg = 'Failed to compare. Check API configuration.';
       setError(errorMsg);
@@ -42,8 +47,7 @@ const ProposalComparison = () => {
     } finally {
       setLoading(false);
     }
-  };
-
+  }, [selectedRFPId]);
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div className="bg-white" style={{ width: '100%', minHeight: '100vh' }}>
@@ -70,15 +74,16 @@ const ProposalComparison = () => {
               {error}
             </Message>
           )}
-
-          {/* --- CONTROLS --- */}
+          {}
           <div className="flex flex-col sm:flex-row gap-4 mb-6 items-end">
             <div className="flex-1 w-full">
               <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Select RFP</label>
               <SelectPicker
                 data={rfps.map(rfp => ({ label: rfp.title, value: rfp.id }))}
                 value={selectedRFPId}
-                onChange={setSelectedRFPId}
+                onChange={(value) => {
+                  setSelectedRFPId(value);
+                }}
                 placeholder="Choose RFP..."
                 block
                 searchable={false}
@@ -87,25 +92,21 @@ const ProposalComparison = () => {
             </div>
             <div>
               <Button
-                onClick={handleCompareProposals}
+                onClick={() => handleCompareProposals(false)}
                 disabled={loading || !selectedRFPId}
                 loading={loading}
                 appearance="primary"
-                color="violet" // RSuite 'violet' matches the indigo theme well
+                color="violet"
                 size="lg"
               >
                 {loading ? 'Analyzing...' : 'Analyze with AI'}
               </Button>
             </div>
           </div>
-
-          {/* --- RESULTS SECTION --- */}
+          {}
           {comparisonResults && comparisonResults.results ? (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-              
-              {/* 1. TABLE with autoHeight 
-                  This fixes the spacing issue by shrinking the table to fit content.
-              */}
+              {}
               <div className="border border-gray-200 rounded-t-lg overflow-hidden">
                 <Table
                   autoHeight={true} 
@@ -119,24 +120,20 @@ const ProposalComparison = () => {
                     <HeaderCell><strong>Vendor</strong></HeaderCell>
                     <Cell dataKey="vendor_name" className="font-medium text-gray-900" />
                   </Column>
-
                   <Column width={150}>
                     <HeaderCell>Total Price</HeaderCell>
                     <Cell>
                       {rowData => <span className="font-semibold text-gray-800">${rowData.total_price?.toLocaleString() || 'N/A'}</span>}
                     </Cell>
                   </Column>
-
                   <Column flexGrow={1} minWidth={200}>
                     <HeaderCell>Delivery Terms</HeaderCell>
                     <Cell dataKey="delivery_terms" />
                   </Column>
-
                   <Column flexGrow={1} minWidth={200}>
                     <HeaderCell>Payment Terms</HeaderCell>
                     <Cell dataKey="payment_terms" />
                   </Column>
-
                   <Column width={120} align="center">
                     <HeaderCell>AI Score</HeaderCell>
                     <Cell>
@@ -145,7 +142,6 @@ const ProposalComparison = () => {
                         let color = 'red';
                         if (score >= 8) color = 'green';
                         else if (score >= 6) color = 'orange';
-                        
                         return (
                           <Tag color={color}>
                             {score.toFixed(1)} / 10
@@ -156,21 +152,17 @@ const ProposalComparison = () => {
                   </Column>
                 </Table>
               </div>
-
-              {/* 2. AI RECOMMENDATION 
-                  Attached directly to the bottom of the table (no top border)
-              */}
+              {}
               <div className="bg-indigo-50 border border-t-0 border-indigo-100 rounded-b-lg p-6 flex gap-4">
                 <div className="mt-1 flex-shrink-0">
-                   {/* RSUITE ICON: Magic (Large) */}
+                   {}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-indigo-900 mb-2">AI Recommendation</h3>
                   <p className="text-indigo-800 text-sm leading-relaxed">
                     {comparisonResults.recommendation}
                   </p>
-                  
-                  {/* Detailed Strengths */}
+                  {}
                   {comparisonResults.results.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-indigo-200/50">
                        <h4 className="text-xs font-bold text-indigo-500 uppercase tracking-wide mb-2 flex items-center gap-1">
@@ -187,12 +179,10 @@ const ProposalComparison = () => {
                   )}
                 </div>
               </div>
-
             </div>
           ) : !loading && (
-            // --- EMPTY STATE ---
             <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50 text-gray-400">
-              {/* RSUITE ICON: PageEnd (Faded) */}
+              {}
               <PageEnd style={{ fontSize: '3em', opacity: 0.2, marginBottom: '10px' }} />
               <p>Select an RFP above to see the comparison.</p>
             </div>
@@ -203,5 +193,4 @@ const ProposalComparison = () => {
     </div>
   );
 };
-
 export default ProposalComparison;

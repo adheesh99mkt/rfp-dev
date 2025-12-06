@@ -54,20 +54,16 @@ class RFPGeneratorAgent:
             template=prompt_template
         )
         
-        # Use invoke instead of LLMChain
         formatted_prompt = prompt.format(user_prompt=user_prompt)
         response = self.llm.invoke(formatted_prompt)
         
-        # Parse the JSON response
         try:
             rfp_data = json.loads(response.content)
-            # Validate and fix deadline if needed
             if rfp_data.get('deadline') == 'YYYY-MM-DDTHH:MM:SS' or not rfp_data.get('deadline'):
                 from datetime import datetime, timedelta
                 rfp_data['deadline'] = (datetime.now() + timedelta(days=30)).isoformat()
             return RFPCreate(**rfp_data)
         except (json.JSONDecodeError, Exception) as e:
-            # Fallback in case of parsing error
             from datetime import datetime, timedelta
             return RFPCreate(
                 title="Procurement Request",
@@ -133,12 +129,10 @@ class ResponseParserAgent:
         formatted_prompt = prompt.format(rfp_details=rfp_details, email_content=email_content)
         response = self.llm.invoke(formatted_prompt)
         
-        # Parse the JSON response
         try:
             proposal_data = json.loads(response.content)
             return ProposalCreate(**proposal_data)
         except json.JSONDecodeError:
-            # Fallback in case of parsing error
             return ProposalCreate(
                 rfp_id=1,
                 vendor_id=1,
@@ -214,12 +208,10 @@ class ComparisonAgent:
         formatted_prompt = prompt.format(rfp_details=rfp_details, proposals_data=proposals_details)
         response = self.llm.invoke(formatted_prompt)
         
-        # Parse the JSON response
         try:
             comparison_data = json.loads(response.content)
             return comparison_data
         except json.JSONDecodeError:
-            # Fallback in case of parsing error
             return {
                 "rfp_id": 1,
                 "results": [],

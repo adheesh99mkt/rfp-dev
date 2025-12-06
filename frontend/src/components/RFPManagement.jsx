@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Table, Button, Modal, ButtonToolbar, Tag, Message, toaster, Pagination, Panel } from 'rsuite';
 import { Visible, Trash } from '@rsuite/icons';
 import { rfpAPI } from '../services/api';
-
 const RFPManagement = () => {
   const [rfps, setRfps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,11 +12,9 @@ const RFPManagement = () => {
   const [deletingRFPId, setDeletingRFPId] = useState(null);
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
-
   useEffect(() => {
     fetchRFPs();
   }, []);
-
   const fetchRFPs = async () => {
     try {
       setLoading(true);
@@ -31,22 +28,18 @@ const RFPManagement = () => {
       setLoading(false);
     }
   };
-
   const handleViewRFP = (rfp) => {
     setSelectedRFP(rfp);
     setShowViewModal(true);
   };
-
   const handleCloseModal = () => {
     setSelectedRFP(null);
     setShowViewModal(false);
   };
-
   const handleDeleteRFP = (rfpId) => {
     setDeletingRFPId(rfpId);
     setShowDeleteConfirm(true);
   };
-
   const confirmDelete = async () => {
     try {
       await rfpAPI.delete(deletingRFPId);
@@ -70,16 +63,13 @@ const RFPManagement = () => {
       setDeletingRFPId(null);
     }
   };
-
   const handleChangePage = (dataKey) => {
     setPage(dataKey);
   };
-
   const handleChangeLength = (dataKey) => {
     setPage(1);
     setLimit(dataKey);
   };
-
   const getPaginatedData = () => {
     return rfps.filter((v, i) => {
       const start = limit * (page - 1);
@@ -87,7 +77,6 @@ const RFPManagement = () => {
       return i >= start && i < end;
     });
   };
-
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div className="bg-white" style={{ width: '100%', minHeight: '100vh' }}>
@@ -111,7 +100,6 @@ const RFPManagement = () => {
                 <p className="text-red-800">{error}</p>
               </div>
             )}
-            
             {loading ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Loading RFPs...</p>
@@ -133,21 +121,18 @@ const RFPManagement = () => {
                     <Table.HeaderCell>Title</Table.HeaderCell>
                     <Table.Cell dataKey="title" />
                   </Table.Column>
-
                   <Table.Column flexGrow={1} minWidth={120}>
                     <Table.HeaderCell>Budget</Table.HeaderCell>
                     <Table.Cell>
                       {rowData => `$${rowData.budget?.toLocaleString() || 'N/A'}`}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column flexGrow={1} minWidth={150}>
                     <Table.HeaderCell>Deadline</Table.HeaderCell>
                     <Table.Cell>
                       {rowData => rowData.deadline ? new Date(rowData.deadline).toLocaleDateString() : 'N/A'}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column flexGrow={1} minWidth={120}>
                     <Table.HeaderCell>Items</Table.HeaderCell>
                     <Table.Cell>
@@ -156,14 +141,12 @@ const RFPManagement = () => {
                       )}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column flexGrow={1} minWidth={150}>
                     <Table.HeaderCell>Created</Table.HeaderCell>
                     <Table.Cell>
                       {rowData => new Date(rowData.created_at).toLocaleDateString()}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column width={180} fixed="right">
                     <Table.HeaderCell>Actions</Table.HeaderCell>
                     <Table.Cell>
@@ -191,7 +174,6 @@ const RFPManagement = () => {
                     </Table.Cell>
                   </Table.Column>
                 </Table>
-                
                 <div style={{ padding: 20 }}>
                   <Pagination
                     prev
@@ -216,8 +198,7 @@ const RFPManagement = () => {
           </div>
         </div>
       </div>
-
-      {/* View RFP Modal */}
+      {}
       <Modal open={showViewModal} onClose={handleCloseModal} size="lg">
         <Modal.Header>
           <Modal.Title>{selectedRFP?.title || 'RFP Details'}</Modal.Title>
@@ -237,12 +218,10 @@ const RFPManagement = () => {
                   </p>
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">Description</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedRFP.description || 'No description'}</p>
               </div>
-
               {selectedRFP.items && selectedRFP.items.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
@@ -276,8 +255,7 @@ const RFPManagement = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} size="xs">
         <Modal.Header>
           <Modal.Title>Confirm Delete</Modal.Title>
@@ -297,5 +275,4 @@ const RFPManagement = () => {
     </div>
   );
 };
-
 export default RFPManagement;

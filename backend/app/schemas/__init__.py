@@ -15,7 +15,6 @@ from .schemas import (
     AIRequest,
     AIResponse
 )
-
 __all__ = [
     "RFPItem",
     "RFPBase",

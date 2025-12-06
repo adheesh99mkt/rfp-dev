@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import 'rsuite/dist/rsuite.min.css'
 import { Nav } from 'rsuite'
-import { Edit, Peoples, Send, BarChart } from '@rsuite/icons'
+import { Edit, Peoples, Send, BarChart, DocPass } from '@rsuite/icons'
 import RFPCreation from './components/RFPCreation'
+import RFPManagement from './components/RFPManagement'
 import VendorManagement from './components/VendorManagement'
 import ProposalManagement from './components/ProposalManagement'
 import ProposalComparison from './components/ProposalComparison'
-
 function App() {
   const [activeTab, setActiveTab] = useState('create')
-
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <header className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 shadow-lg flex-shrink-0">
@@ -30,43 +29,45 @@ function App() {
           </div>
         </div>
       </header>
-
-      {/* Navigation */}
+      {}
       <nav className="bg-white/80 backdrop-blur-md shadow-sm border-b border-indigo-100 flex-shrink-0">
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <Nav appearance="subtle" activeKey={activeTab} onSelect={setActiveTab} style={{ marginBottom: 0 }}>
             <Nav.Item eventKey="create" icon={<Edit />}>Create RFP</Nav.Item>
+            <Nav.Item eventKey="viewrfp" icon={<DocPass />}>View RFPs</Nav.Item>
             <Nav.Item eventKey="manage" icon={<Peoples />}>Manage Vendors</Nav.Item>
             <Nav.Item eventKey="proposals" icon={<Send />}>Vendor Proposals</Nav.Item>
             <Nav.Item eventKey="compare" icon={<BarChart />}>AI Compare</Nav.Item>
           </Nav>
         </div>
       </nav>
-
-      {/* Main Content */}
+      {}
       <main className="flex-1 overflow-y-auto w-full">
-        {/* Create RFP Tab */}
+        {}
         {activeTab === 'create' && (
           <div className="py-6 px-4">
             <RFPCreation />
           </div>
         )}
-
-        {/* Manage Vendors Tab */}
+        {}
+        {activeTab === 'viewrfp' && (
+          <div className="py-6 px-4">
+            <RFPManagement />
+          </div>
+        )}
+        {}
         {activeTab === 'manage' && (
           <div className="py-6 px-4">
             <VendorManagement />
           </div>
         )}
-
-        {/* Vendor Proposals Tab */}
+        {}
         {activeTab === 'proposals' && (
           <div className="py-6 px-4">
             <ProposalManagement />
           </div>
         )}
-
-        {/* Compare Proposals Tab */}
+        {}
         {activeTab === 'compare' && (
           <div className="py-6 px-4">
             <ProposalComparison />
@@ -76,5 +77,4 @@ function App() {
     </div>
   )
 }
-
 export default App

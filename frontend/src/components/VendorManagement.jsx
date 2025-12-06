@@ -2,14 +2,12 @@ import { useState, useEffect } from 'react';
 import { Table, Button, Modal, ButtonToolbar, Message, toaster, Pagination, Input } from 'rsuite';
 import { Plus, Edit, Trash } from '@rsuite/icons';
 import { vendorAPI } from '../services/api';
-
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
-  
   const [showAddForm, setShowAddForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingVendorId, setDeletingVendorId] = useState(null);
@@ -21,12 +19,9 @@ const VendorManagement = () => {
     phone: '',
     address: ''
   });
-
-  // Fetch vendors on component mount
   useEffect(() => {
     fetchVendors();
   }, []);
-
   const fetchVendors = async () => {
     try {
       setLoading(true);
@@ -40,7 +35,6 @@ const VendorManagement = () => {
       setLoading(false);
     }
   };
-
   const handleAddVendor = () => {
     setFormData({
       name: '',
@@ -52,18 +46,15 @@ const VendorManagement = () => {
     setEditingVendor(null);
     setShowAddForm(true);
   };
-
   const handleEditVendor = (vendor) => {
     setFormData(vendor);
     setEditingVendor(vendor);
     setShowAddForm(true);
   };
-
   const handleDeleteVendor = (vendorId) => {
     setDeletingVendorId(vendorId);
     setShowDeleteConfirm(true);
   };
-
   const confirmDelete = async () => {
     try {
       await vendorAPI.delete(deletingVendorId);
@@ -87,10 +78,8 @@ const VendorManagement = () => {
       setDeletingVendorId(null);
     }
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     try {
       if (editingVendor) {
         await vendorAPI.update(editingVendor.id, formData);
@@ -109,7 +98,6 @@ const VendorManagement = () => {
           { placement: 'topEnd' }
         );
       }
-      
       await fetchVendors();
       setShowAddForm(false);
       setFormData({
@@ -129,23 +117,19 @@ const VendorManagement = () => {
       console.error(err);
     }
   };
-
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
   };
-
   const handleChangePage = (dataKey) => {
     setPage(dataKey);
   };
-
   const handleChangeLength = (dataKey) => {
     setPage(1);
     setLimit(dataKey);
   };
-
   const getPaginatedData = () => {
     return vendors.filter((v, i) => {
       const start = limit * (page - 1);
@@ -153,7 +137,6 @@ const VendorManagement = () => {
       return i >= start && i < end;
     });
   };
-
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div className="bg-white" style={{ width: '100%', minHeight: '100vh' }}>
@@ -188,7 +171,6 @@ const VendorManagement = () => {
                 <p className="text-red-800">{error}</p>
               </div>
             )}
-            
             {loading ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Loading vendors...</p>
@@ -207,22 +189,18 @@ const VendorManagement = () => {
                   <Table.HeaderCell>Name</Table.HeaderCell>
                   <Table.Cell dataKey="name" />
                 </Table.Column>
-
                 <Table.Column flexGrow={2} minWidth={250}>
                   <Table.HeaderCell>Email</Table.HeaderCell>
                   <Table.Cell dataKey="email" />
                 </Table.Column>
-
                 <Table.Column flexGrow={1} minWidth={150}>
                   <Table.HeaderCell>Contact Person</Table.HeaderCell>
                   <Table.Cell dataKey="contact_person" />
                 </Table.Column>
-
                 <Table.Column flexGrow={1} minWidth={150}>
                   <Table.HeaderCell>Phone</Table.HeaderCell>
                   <Table.Cell dataKey="phone" />
                 </Table.Column>
-
                 <Table.Column width={180} fixed="right">
                   <Table.HeaderCell>Actions</Table.HeaderCell>
                   <Table.Cell>
@@ -275,8 +253,7 @@ const VendorManagement = () => {
           </div>
         </div>
       </div>
-
-      {/* Add/Edit Vendor Modal */}
+      {}
       <Modal open={showAddForm} onClose={() => setShowAddForm(false)} size="md">
         <Modal.Header>
           <Modal.Title>{editingVendor ? 'Edit Vendor' : 'Add New Vendor'}</Modal.Title>
@@ -344,8 +321,7 @@ const VendorManagement = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} size="xs">
         <Modal.Header>
           <Modal.Title>Confirm Delete</Modal.Title>
@@ -365,5 +341,4 @@ const VendorManagement = () => {
     </div>
   );
 };
-
 export default VendorManagement;

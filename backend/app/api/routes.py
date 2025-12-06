@@ -1,16 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List
 from app.schemas import RFPCreate, RFPResponse, VendorCreate, VendorResponse, ProposalCreate, ProposalResponse, ComparisonResult, AIRequest
 from app.core.agents import RFPGeneratorAgent, ResponseParserAgent, ComparisonAgent
 from app.database import get_db
 from sqlalchemy.orm import Session
-from app.crud import rfp as rfp_crud, vendor as vendor_crud, proposal as proposal_crud
+from app.crud import rfp as rfp_crud, vendor as vendor_crud, proposal as proposal_crud, comparison_cache as cache_crud
 from app.utils.email_utils import EmailSender
 from pydantic import BaseModel
 
 router = APIRouter()
 
-# Placeholder for RFP endpoints
 @router.post("/rfps/", response_model=dict)
 async def create_rfp(rfp: RFPCreate, db: Session = Depends(get_db)):
     db_rfp = rfp_crud.create_rfp(db, rfp)
@@ -43,7 +42,6 @@ async def generate_rfp(request: AIRequest):
     """Generate RFP from natural language prompt using AI"""
     agent = RFPGeneratorAgent()
     rfp_data = agent.generate_rfp(request.prompt)
-    # Return the generated RFP data without saving to database yet
     return rfp_data.dict()
 
 @router.get("/rfps/{rfp_id}", response_model=dict)
@@ -77,10 +75,38 @@ async def delete_rfp(rfp_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="RFP not found")
     return {"message": "RFP deleted successfully"}
 
-# Placeholder for Vendor endpoints
+@router.get("/rfps/{rfp_id}", response_model=dict)
+async def get_rfp(rfp_id: int, db: Session = Depends(get_db)):
+    """Get a single RFP by ID"""
+    db_rfp = rfp_crud.get_rfp(db, rfp_id)
+    if db_rfp is None:
+        raise HTTPException(status_code=404, detail="RFP not found")
+    return {
+        "id": db_rfp.id,
+        "title": db_rfp.title,
+        "description": db_rfp.description,
+        "budget": db_rfp.budget,
+        "deadline": db_rfp.deadline.isoformat() if db_rfp.deadline else None,
+        "created_at": db_rfp.created_at.isoformat() if db_rfp.created_at else None,
+        "items": [{
+            "id": item.id,
+            "name": item.name,
+            "quantity": item.quantity,
+            "description": item.description,
+            "specifications": item.specifications
+        } for item in db_rfp.items]
+    }
+
+@router.delete("/rfps/{rfp_id}")
+async def delete_rfp(rfp_id: int, db: Session = Depends(get_db)):
+    """Delete an RFP and all associated proposals"""
+    success = rfp_crud.delete_rfp(db, rfp_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="RFP not found")
+    return {"message": "RFP deleted successfully"}
+
 @router.post("/vendors/", response_model=dict)
 async def create_vendor(vendor: VendorCreate, db: Session = Depends(get_db)):
-    # Check if vendor already exists
     existing_vendor = vendor_crud.get_vendor_by_email(db, vendor.email)
     if existing_vendor:
         raise HTTPException(status_code=400, detail="Vendor with this email already exists")
@@ -130,7 +156,6 @@ async def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Vendor not found")
     return {"message": "Vendor deleted successfully"}
 
-# Placeholder for Proposal endpoints
 @router.post("/proposals/", response_model=dict)
 async def create_proposal(proposal: ProposalCreate, db: Session = Depends(get_db)):
     db_proposal = proposal_crud.create_proposal(db, proposal)
@@ -149,6 +174,7 @@ async def get_proposals(skip: int = 0, limit: int = 100, db: Session = Depends(g
             "total_price": proposal.total_price,
             "delivery_terms": proposal.delivery_terms,
             "payment_terms": proposal.payment_terms,
+            "status": proposal.status or "received",
             "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
             "items": [{
                 "id": item.id,
@@ -177,6 +203,7 @@ async def get_proposal(proposal_id: int, db: Session = Depends(get_db)):
         "payment_terms": db_proposal.payment_terms,
         "validity_period": db_proposal.validity_period,
         "notes": db_proposal.notes,
+        "status": db_proposal.status or "received",
         "created_at": db_proposal.created_at.isoformat() if db_proposal.created_at else None,
         "items": [{
             "id": item.id,
@@ -202,6 +229,7 @@ async def get_proposals_by_rfp(rfp_id: int, db: Session = Depends(get_db)):
             "total_price": proposal.total_price,
             "delivery_terms": proposal.delivery_terms,
             "payment_terms": proposal.payment_terms,
+            "status": proposal.status or "received",
             "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
             "items": [{
                 "id": item.id,
@@ -221,15 +249,90 @@ async def delete_proposal(proposal_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Proposal not found")
     return {"message": "Proposal deleted successfully"}
 
-@router.get("/proposals/compare/{rfp_id}", response_model=dict)
-async def compare_proposals_endpoint(rfp_id: int, db: Session = Depends(get_db)):
-    """Compare proposals for a specific RFP using AI"""
-    return await compare_proposals(rfp_id, db)
+@router.post("/proposals/{proposal_id}/accept")
+async def accept_proposal(proposal_id: int, db: Session = Depends(get_db)):
+    """
+    Accept a proposal and reject all other proposals for the same RFP
+    """
+    db_proposal = proposal_crud.get_proposal(db, proposal_id)
+    if db_proposal is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    db_proposal.status = "accepted"
+    
+    other_proposals = db.query(proposal_crud.ProposalModel).filter(
+        proposal_crud.ProposalModel.rfp_id == db_proposal.rfp_id,
+        proposal_crud.ProposalModel.id != proposal_id
+    ).all()
+    
+    for proposal in other_proposals:
+        proposal.status = "rejected"
+    
+    db_rfp = rfp_crud.get_rfp(db, db_proposal.rfp_id)
+    if db_rfp:
+        db_rfp.status = "closed"
+    
+    db.commit()
+    db.refresh(db_proposal)
+    
+    return {
+        "message": "Proposal accepted successfully",
+        "proposal_id": proposal_id,
+        "vendor_name": db_proposal.vendor.name if db_proposal.vendor else None,
+        "status": "accepted"
+    }
 
-# Placeholder for comparison endpoint
+@router.post("/proposals/{proposal_id}/reject")
+async def reject_proposal(proposal_id: int, db: Session = Depends(get_db)):
+    """
+    Reject a proposal
+    """
+    db_proposal = proposal_crud.get_proposal(db, proposal_id)
+    if db_proposal is None:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    db_proposal.status = "rejected"
+    
+    db.commit()
+    db.refresh(db_proposal)
+    
+    return {
+        "message": "Proposal rejected",
+        "proposal_id": proposal_id,
+        "vendor_name": db_proposal.vendor.name if db_proposal.vendor else None,
+        "status": "rejected"
+    }
+
+@router.get("/proposals/compare/{rfp_id}", response_model=dict)
+async def compare_proposals_endpoint(rfp_id: int, force_refresh: bool = Query(False, description="Force re-analysis with AI"), db: Session = Depends(get_db)):
+    """Compare proposals for a specific RFP using AI with caching support
+    
+    Args:
+        rfp_id: The RFP ID to compare proposals for
+        force_refresh: If True, bypass cache and force fresh AI analysis (costs money!)
+    """
+    if not force_refresh:
+        cached_result = cache_crud.get_cached_comparison(db, rfp_id)
+        if cached_result:
+            return {
+                "comparison": cached_result.comparison_result,
+                "cached": True,
+                "analyzed_at": cached_result.analyzed_at.isoformat() if cached_result.analyzed_at else None,
+                "message": "📦 Using cached AI analysis (no API cost)"
+            }
+    
+    comparison_data = await compare_proposals(rfp_id, db)
+    
+    cache_crud.create_or_update_cache(db, rfp_id, comparison_data)
+    
+    return {
+        "comparison": comparison_data,
+        "cached": False,
+        "message": "🤖 Fresh AI analysis completed and cached"
+    }
+
 @router.get("/compare/{rfp_id}", response_model=dict)
 async def compare_proposals(rfp_id: int, db: Session = Depends(get_db)):
-    # Get RFP and proposals
     db_rfp = rfp_crud.get_rfp(db, rfp_id)
     if db_rfp is None:
         raise HTTPException(status_code=404, detail="RFP not found")
@@ -238,10 +341,8 @@ async def compare_proposals(rfp_id: int, db: Session = Depends(get_db)):
     if not proposals:
         raise HTTPException(status_code=404, detail="No proposals found for this RFP")
     
-    # Use AI agent to compare proposals
     agent = ComparisonAgent()
     
-    # Prepare RFP data
     rfp_data = {
         "id": db_rfp.id,
         "title": db_rfp.title,
@@ -252,7 +353,6 @@ async def compare_proposals(rfp_id: int, db: Session = Depends(get_db)):
         } for item in db_rfp.items]
     }
     
-    # Prepare proposals data
     proposals_data = []
     for proposal in proposals:
         proposals_data.append({
@@ -272,12 +372,10 @@ async def compare_proposals(rfp_id: int, db: Session = Depends(get_db)):
     comparison_data = agent.compare_proposals(rfp_data, proposals_data)
     return comparison_data
 
-# AI Agent endpoints
 @router.post("/ai/create-rfp")
 async def ai_create_rfp(request: AIRequest, db: Session = Depends(get_db)):
     agent = RFPGeneratorAgent()
     rfp_data = agent.generate_rfp(request.prompt)
-    # Save the RFP to the database
     db_rfp = rfp_crud.create_rfp(db, rfp_data)
     return {
         "message": "RFP created from AI prompt",
@@ -300,37 +398,29 @@ async def ai_create_rfp(request: AIRequest, db: Session = Depends(get_db)):
 @router.post("/ai/parse-response")
 async def ai_parse_response(email_content: str, db: Session = Depends(get_db)):
     agent = ResponseParserAgent()
-    # In a real implementation, we would fetch the actual RFP data from the database
     rfp_data = {}
     proposal_data = agent.parse_vendor_response(email_content, rfp_data)
-    # Here we would save the proposal to the database
-    # For now, we'll just return the generated data
     return {"message": "Vendor response parsed", "proposal": proposal_data.dict()}
 
 @router.post("/ai/compare-proposals")
 async def ai_compare_proposals(rfp_id: int, db: Session = Depends(get_db)):
     agent = ComparisonAgent()
-    # In a real implementation, we would fetch the actual RFP and proposals from the database
     rfp_data = {}
     proposals_data = []
     comparison_data = agent.compare_proposals(rfp_data, proposals_data)
-    # Here we would save the comparison results
-    # For now, we'll just return the generated data
     return {"message": "Proposals compared", "results": comparison_data}
 
-# Email endpoints
 class SendRFPRequest(BaseModel):
     rfp_id: int
     vendor_ids: List[int]
 
 @router.post("/send-rfp")
 async def send_rfp_to_vendors(request: SendRFPRequest, db: Session = Depends(get_db)):
-    # Get RFP
+
     db_rfp = rfp_crud.get_rfp(db, request.rfp_id)
     if db_rfp is None:
         raise HTTPException(status_code=404, detail="RFP not found")
     
-    # Get vendors
     vendors = []
     for vendor_id in request.vendor_ids:
         vendor = vendor_crud.get_vendor(db, vendor_id)
@@ -340,7 +430,6 @@ async def send_rfp_to_vendors(request: SendRFPRequest, db: Session = Depends(get
     if not vendors:
         raise HTTPException(status_code=404, detail="No valid vendors found")
     
-    # Prepare email content
     subject = f"RFP: {db_rfp.title}"
     body = f"""
 Dear Vendor,
@@ -381,7 +470,6 @@ Best regards,
 RFP Management System
 """
     
-    # Send email to each vendor
     email_sender = EmailSender()
     vendor_emails = [vendor.email for vendor in vendors]
     

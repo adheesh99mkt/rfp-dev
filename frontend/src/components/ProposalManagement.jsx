@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Panel, ButtonToolbar, Tag, Message, toaster, Pagination } from 'rsuite';
-import { Visible, Trash } from '@rsuite/icons';
+import { Visible, Trash, Check, Close } from '@rsuite/icons';
 import { proposalAPI } from '../services/api';
-
 const ProposalManagement = () => {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,13 +10,15 @@ const ProposalManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingProposalId, setDeletingProposalId] = useState(null);
+  const [showAcceptConfirm, setShowAcceptConfirm] = useState(false);
+  const [acceptingProposal, setAcceptingProposal] = useState(null);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [rejectingProposal, setRejectingProposal] = useState(null);
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
-
   useEffect(() => {
     fetchProposals();
   }, []);
-
   const fetchProposals = async () => {
     try {
       setLoading(true);
@@ -31,26 +32,21 @@ const ProposalManagement = () => {
       setLoading(false);
     }
   };
-
   const handleViewProposal = (proposal) => {
     setSelectedProposal(proposal);
     setShowModal(true);
   };
-
   const handleCloseModal = () => {
     setSelectedProposal(null);
     setShowModal(false);
   };
-
   const handleChangePage = (dataKey) => {
     setPage(dataKey);
   };
-
   const handleChangeLength = (dataKey) => {
     setPage(1);
     setLimit(dataKey);
   };
-
   const getPaginatedData = () => {
     return proposals.filter((v, i) => {
       const start = limit * (page - 1);
@@ -58,12 +54,10 @@ const ProposalManagement = () => {
       return i >= start && i < end;
     });
   };
-
   const handleDeleteProposal = (proposalId) => {
     setDeletingProposalId(proposalId);
     setShowDeleteConfirm(true);
   };
-
   const confirmDelete = async () => {
     try {
       await proposalAPI.delete(deletingProposalId);
@@ -87,7 +81,60 @@ const ProposalManagement = () => {
       setDeletingProposalId(null);
     }
   };
-
+  const handleAcceptProposal = (proposal) => {
+    setAcceptingProposal(proposal);
+    setShowAcceptConfirm(true);
+  };
+  const confirmAccept = async () => {
+    try {
+      await proposalAPI.accept(acceptingProposal.id);
+      await fetchProposals();
+      toaster.push(
+        <Message showIcon type="success" closable>
+          Proposal accepted successfully!
+        </Message>,
+        { placement: 'topEnd' }
+      );
+    } catch (err) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          Failed to accept proposal
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(err);
+    } finally {
+      setShowAcceptConfirm(false);
+      setAcceptingProposal(null);
+    }
+  };
+  const handleRejectProposal = (proposal) => {
+    setRejectingProposal(proposal);
+    setShowRejectConfirm(true);
+  };
+  const confirmReject = async () => {
+    try {
+      await proposalAPI.reject(rejectingProposal.id);
+      await fetchProposals();
+      toaster.push(
+        <Message showIcon type="warning" closable>
+          Proposal rejected
+        </Message>,
+        { placement: 'topEnd' }
+      );
+    } catch (err) {
+      toaster.push(
+        <Message showIcon type="error" closable>
+          Failed to reject proposal
+        </Message>,
+        { placement: 'topEnd' }
+      );
+      console.error(err);
+    } finally {
+      setShowRejectConfirm(false);
+      setRejectingProposal(null);
+    }
+  };
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <div className="bg-white" style={{ width: '100%', minHeight: '100vh' }}>
@@ -111,7 +158,6 @@ const ProposalManagement = () => {
                 <p className="text-red-800">{error}</p>
               </div>
             )}
-            
             {loading ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Loading proposals...</p>
@@ -133,59 +179,92 @@ const ProposalManagement = () => {
                   <Table.HeaderCell>Vendor</Table.HeaderCell>
                   <Table.Cell dataKey="vendor_name" />
                 </Table.Column>
-
                 <Table.Column width={120}>
                   <Table.HeaderCell>RFP ID</Table.HeaderCell>
                   <Table.Cell>
                     {rowData => `RFP #${rowData.rfp_id}`}
                   </Table.Cell>
                 </Table.Column>
-
                 <Table.Column flexGrow={1} minWidth={150}>
                   <Table.HeaderCell>Total Price</Table.HeaderCell>
                   <Table.Cell>
                     {rowData => `$${rowData.total_price.toLocaleString()}`}
                   </Table.Cell>
                 </Table.Column>
-
                 <Table.Column flexGrow={1} minWidth={150}>
                   <Table.HeaderCell>Received Date</Table.HeaderCell>
                   <Table.Cell>
                     {rowData => new Date(rowData.created_at).toLocaleDateString()}
                   </Table.Cell>
                 </Table.Column>
-
                 <Table.Column width={120}>
                   <Table.HeaderCell>Status</Table.HeaderCell>
                   <Table.Cell>
-                    {() => <Tag color="green">Received</Tag>}
+                    {rowData => {
+                      const status = rowData.status || 'received';
+                      let color = 'blue';
+                      let text = 'Received';
+                      if (status === 'accepted') {
+                        color = 'green';
+                        text = 'Accepted';
+                      } else if (status === 'rejected') {
+                        color = 'red';
+                        text = 'Rejected';
+                      }
+                      return <Tag color={color}>{text}</Tag>;
+                    }}
                   </Table.Cell>
                 </Table.Column>
-
-                <Table.Column width={180} fixed="right">
+                <Table.Column width={280} fixed="right">
                   <Table.HeaderCell>Actions</Table.HeaderCell>
                   <Table.Cell>
-                    {rowData => (
-                      <ButtonToolbar>
-                        <Button
-                          size="sm"
-                          appearance="ghost"
-                          startIcon={<Visible />}
-                          onClick={() => handleViewProposal(rowData)}
-                        >
-                          View
-                        </Button>
-                        <Button
-                          size="sm"
-                          appearance="ghost"
-                          color="red"
-                          startIcon={<Trash />}
-                          onClick={() => handleDeleteProposal(rowData.id)}
-                        >
-                          Delete
-                        </Button>
-                      </ButtonToolbar>
-                    )}
+                    {rowData => {
+                      const status = rowData.status || 'received';
+                      const isAccepted = status === 'accepted';
+                      const isRejected = status === 'rejected';
+                      const isPending = status === 'received';
+                      return (
+                        <ButtonToolbar>
+                          <Button
+                            size="sm"
+                            appearance="ghost"
+                            startIcon={<Visible />}
+                            onClick={() => handleViewProposal(rowData)}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            appearance="ghost"
+                            color="green"
+                            startIcon={<Check />}
+                            onClick={() => handleAcceptProposal(rowData)}
+                            disabled={isAccepted || isRejected}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            appearance="ghost"
+                            color="orange"
+                            startIcon={<Close />}
+                            onClick={() => handleRejectProposal(rowData)}
+                            disabled={isAccepted || isRejected}
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            size="sm"
+                            appearance="ghost"
+                            color="red"
+                            startIcon={<Trash />}
+                            onClick={() => handleDeleteProposal(rowData.id)}
+                          >
+                            Delete
+                          </Button>
+                        </ButtonToolbar>
+                      );
+                    }}
                   </Table.Cell>
                 </Table.Column>
               </Table>
@@ -213,8 +292,7 @@ const ProposalManagement = () => {
           </div>
         </div>
       </div>
-
-      {/* Proposal Detail Modal */}
+      {}
       <Modal open={showModal} onClose={handleCloseModal} size="lg">
         <Modal.Header>
           <Modal.Title>
@@ -248,11 +326,22 @@ const ProposalManagement = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    <Tag color="green">Received</Tag>
+                    {(() => {
+                      const status = selectedProposal.status || 'received';
+                      let color = 'blue';
+                      let text = 'Received';
+                      if (status === 'accepted') {
+                        color = 'green';
+                        text = 'Accepted';
+                      } else if (status === 'rejected') {
+                        color = 'red';
+                        text = 'Rejected';
+                      }
+                      return <Tag color={color}>{text}</Tag>;
+                    })()}
                   </p>
                 </div>
               </div>
-              
               <div>
                 <h4 className="text-lg font-medium text-gray-900 mb-3">Proposal Items</h4>
                 <Table
@@ -267,26 +356,22 @@ const ProposalManagement = () => {
                       {(rowData, rowIndex) => `Item ${rowIndex + 1}`}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column width={120}>
                     <Table.HeaderCell>Price/Unit</Table.HeaderCell>
                     <Table.Cell>
                       {rowData => `$${rowData.price_per_unit.toFixed(2)}`}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column width={120}>
                     <Table.HeaderCell>Total</Table.HeaderCell>
                     <Table.Cell>
                       {rowData => `$${rowData.total_price.toFixed(2)}`}
                     </Table.Cell>
                   </Table.Column>
-
                   <Table.Column width={120}>
                     <Table.HeaderCell>Delivery (days)</Table.HeaderCell>
                     <Table.Cell dataKey="delivery_time" />
                   </Table.Column>
-
                   <Table.Column width={140}>
                     <Table.HeaderCell>Warranty (months)</Table.HeaderCell>
                     <Table.Cell dataKey="warranty_period" />
@@ -297,13 +382,64 @@ const ProposalManagement = () => {
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button onClick={handleCloseModal} appearance="primary">
+          <Button 
+            onClick={() => handleAcceptProposal(selectedProposal)} 
+            appearance="primary" 
+            color="green" 
+            startIcon={<Check />}
+            disabled={selectedProposal?.status === 'accepted' || selectedProposal?.status === 'rejected'}
+          >
+            Accept Proposal
+          </Button>
+          <Button 
+            onClick={() => handleRejectProposal(selectedProposal)} 
+            appearance="primary" 
+            color="orange" 
+            startIcon={<Close />}
+            disabled={selectedProposal?.status === 'accepted' || selectedProposal?.status === 'rejected'}
+          >
+            Reject Proposal
+          </Button>
+          <Button onClick={handleCloseModal} appearance="subtle">
             Close
           </Button>
         </Modal.Footer>
       </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {}
+      <Modal open={showAcceptConfirm} onClose={() => setShowAcceptConfirm(false)} size="xs">
+        <Modal.Header>
+          <Modal.Title>Confirm Accept</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Are you sure you want to accept this proposal from {acceptingProposal?.vendor_name}?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button onClick={confirmAccept} appearance="primary" color="green">
+            Accept
+          </Button>
+          <Button onClick={() => setShowAcceptConfirm(false)} appearance="subtle">
+            Cancel
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      {}
+      <Modal open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} size="xs">
+        <Modal.Header>
+          <Modal.Title>Confirm Reject</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Are you sure you want to reject this proposal from {rejectingProposal?.vendor_name}?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button onClick={confirmReject} appearance="primary" color="orange">
+            Reject
+          </Button>
+          <Button onClick={() => setShowRejectConfirm(false)} appearance="subtle">
+            Cancel
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      {}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} size="xs">
         <Modal.Header>
           <Modal.Title>Confirm Delete</Modal.Title>
@@ -323,5 +459,4 @@ const ProposalManagement = () => {
     </div>
   );
 };
-
 export default ProposalManagement;

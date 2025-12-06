@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, Checkbox, Message, toaster, Loader } from 'rsuite';
 import { Send, Save, Gear } from '@rsuite/icons';
 import { rfpAPI, vendorAPI } from '../services/api';
-
-// --- ICONS (For that professional UI look) ---
 const SendIcon = () => (
   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
 );
@@ -13,21 +11,16 @@ const SaveIcon = () => (
 const SparklesIcon = () => (
    <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
 );
-
 const RFPCreation = () => {
-  // --- STATE MANAGEMENT (Your original logic) ---
   const [prompt, setPrompt] = useState('');
   const [generatedRFP, setGeneratedRFP] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
   const [selectedVendors, setSelectedVendors] = useState([]);
   const [error, setError] = useState(null);
-
-  // --- API HANDLERS (Your original logic) ---
   useEffect(() => {
     fetchVendors();
   }, []);
-
   const fetchVendors = async () => {
     try {
       const data = await vendorAPI.getAll();
@@ -36,7 +29,6 @@ const RFPCreation = () => {
       console.error('Failed to fetch vendors:', err);
     }
   };
-
   const handleGenerateRFP = async () => {
     if (!prompt.trim()) return;
     setIsLoading(true);
@@ -51,7 +43,6 @@ const RFPCreation = () => {
       setIsLoading(false);
     }
   };
-
   const handleSaveRFP = async () => {
     try {
       await rfpAPI.create(generatedRFP);
@@ -73,7 +64,6 @@ const RFPCreation = () => {
       console.error(error);
     }
   };
-
   const handleSendRFP = async () => {
     if (selectedVendors.length === 0) {
       toaster.push(
@@ -106,41 +96,33 @@ const RFPCreation = () => {
       console.error(error);
     }
   };
-
   return (
-    // MAIN CONTAINER: Full Screen Split View
     <div className="flex h-screen w-full bg-white overflow-hidden font-sans text-gray-800">
-      
-      {/* --- LEFT PANEL: INPUT (50% Width) --- */}
+      {}
       <div className="w-1/2 flex flex-col border-r border-gray-200">
-        
-        {/* Header */}
+        {}
         <div className="h-14 min-h-[3.5rem] flex items-center px-6 border-b border-gray-200 bg-gray-50">
           <span className="bg-indigo-100 text-indigo-700 p-1.5 rounded-md mr-3">
              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
           </span>
           <h2 className="font-semibold text-gray-700">RFP Composer</h2>
         </div>
-
-        {/* Content Area */}
+        {}
         <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-white">
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
               {error}
             </div>
           )}
-
           <p className="text-sm text-gray-500 mb-2">
             Describe requirements in natural language.
           </p>
-
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             className="max-h-[40%] flex-1 w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none font-mono text-sm bg-gray-50"
             placeholder="// Example:&#10;I need to procure laptops and monitors for our new office.&#10;Budget is $50,000 total.&#10;Need 20 laptops (16GB RAM) and 15 monitors."
           ></textarea>
-
           <div className="mt-4 flex justify-end">
             <Button
               onClick={handleGenerateRFP}
@@ -155,11 +137,9 @@ const RFPCreation = () => {
           </div>
         </div>
       </div>
-
-      {/* --- RIGHT PANEL: OUTPUT (50% Width) --- */}
+      {}
       <div className="w-1/2 flex flex-col bg-gray-50/50">
-        
-        {/* Header */}
+        {}
         <div className="h-14 min-h-[3.5rem] flex items-center justify-between px-6 border-b border-gray-200 bg-white">
           <div className="flex items-center">
              <SparklesIcon />
@@ -171,11 +151,9 @@ const RFPCreation = () => {
              </span>
           )}
         </div>
-
-        {/* Content Area */}
+        {}
         <div className="flex-1 overflow-y-auto p-8 relative">
-          
-          {/* 1. EMPTY STATE */}
+          {}
           {!generatedRFP && !isLoading && (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
                <svg className="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -183,20 +161,17 @@ const RFPCreation = () => {
                <p className="text-sm">Type your requirements on the left to see the result here.</p>
             </div>
           )}
-
-          {/* 2. LOADING STATE */}
+          {}
           {isLoading && (
              <div className="h-full flex flex-col items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
                 <p className="mt-4 text-gray-500">Analyzing requirements...</p>
              </div>
           )}
-
-          {/* 3. RESULT STATE */}
+          {}
           {generatedRFP && !isLoading && (
             <div className="space-y-6 animate-in fade-in duration-300">
-              
-              {/* General Details Card */}
+              {}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">General Details</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -229,8 +204,7 @@ const RFPCreation = () => {
                    </div>
                 </div>
               </div>
-
-              {/* Items Card */}
+              {}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">Items Required</h3>
                 <div className="space-y-3">
@@ -266,8 +240,7 @@ const RFPCreation = () => {
                   ))}
                 </div>
               </div>
-
-               {/* Vendors Card */}
+               {}
                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                  <h3 className="text-sm uppercase tracking-wide text-gray-500 font-semibold mb-4">Select Vendors</h3>
                  <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
@@ -293,8 +266,7 @@ const RFPCreation = () => {
                    ))}
                  </div>
                </div>
-
-               {/* Action Footer */}
+               {}
                <div className="pt-2 flex gap-3">
                   <Button
                     onClick={handleSaveRFP}
@@ -316,7 +288,6 @@ const RFPCreation = () => {
                     Send to Vendors
                   </Button>
                </div>
-
             </div>
           )}
         </div>
@@ -324,5 +295,4 @@ const RFPCreation = () => {
     </div>
   );
 };
-
 export default RFPCreation;
